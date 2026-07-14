@@ -2,6 +2,7 @@
 #include <string.h>
 #include <arpa/inet.h>
 #include <unistd.h>
+#include <stdint.h>
 
 #define PORT 8080
 #define ARRAY_SIZE 8
@@ -31,7 +32,8 @@ int main(void) {
         
         if (bytes_received > 0) {
             for (int i = 0; i < ARRAY_SIZE; i++) {
-                printf("[%d] = %u\n", i, array[i]);
+                uint32_t host_val = ntohl(array[i]);
+                printf("[%d] = %u\n", i, host_val);
             }
         }
     }
