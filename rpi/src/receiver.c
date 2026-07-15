@@ -18,7 +18,6 @@ int main(void) {
     atexit(cleanup);
     signal(SIGINT, exit);
 
-    if (chip_init() == -1) exit(EXIT_FAILURE);
     if (max7219_init() == -1) exit(EXIT_FAILURE);
 
     server_socket = socket(AF_INET, SOCK_DGRAM, 0);

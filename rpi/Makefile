@@ -1,6 +1,5 @@
 CC = gcc
 CFLAGS = -Wall -Wextra -O2 -I.
-LDFLAGS = -lgpiod
 
 TARGET = max7219-rpi
 SRCDIR = src

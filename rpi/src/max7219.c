@@ -1,15 +1,13 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <gpiod.h>
 #include <stdint.h>
 #include <unistd.h>
 #include "../inc/max7219.h"
+#include <sys/ioctl.h>
+#include <linux/spi/spidev.h>
+#include <fcntl.h>
 
-#define PIN_DIN 10
-#define PIN_CS  8
-#define PIN_CLK 11
-
-#define CHIP_PATH "/dev/gpiochip0"
+#define SPI_DEVICE "/dev/spidev0.0"
 
 #define DECODE_MODE 0x09
 #define INTENSITY 0x0A
@@ -17,39 +15,31 @@
 #define SHUTDOWN 0x0C
 #define DISPLAY_TEST 0x0F
 
-struct gpiod_chip *chip = NULL;
-struct gpiod_line_request *request = NULL;
-unsigned int out_offsets[] = {PIN_DIN, PIN_CS, PIN_CLK};
+int fd = -1;
+uint8_t mode = SPI_MODE_0;
+uint8_t bits = 8;
+uint32_t speed = 1000000;
 
-/*** SEND DATA ***/
-
-void max7219_send_packet(uint8_t reg, uint8_t data) {
-    uint16_t packet = ((uint16_t)reg << 8) | data;
-
-    for (int i = 0; i < 16; i++) {
-
-        gpiod_line_request_set_value(request, PIN_CLK, GPIOD_LINE_VALUE_INACTIVE);
-
-        if (packet & (1 << (15 - i))) 
-            gpiod_line_request_set_value(request, PIN_DIN, GPIOD_LINE_VALUE_ACTIVE);
-        else
-            gpiod_line_request_set_value(request, PIN_DIN, GPIOD_LINE_VALUE_INACTIVE);
-
-        gpiod_line_request_set_value(request, PIN_CLK, GPIOD_LINE_VALUE_ACTIVE);
-    }
-    
-}
 
 void max7219_write_row(uint8_t reg, uint32_t data) {
-    gpiod_line_request_set_value(request, PIN_CS, GPIOD_LINE_VALUE_INACTIVE);
+    uint8_t tx_buf[8] = {0};
+    uint8_t rx_buf[8] = {0};
 
     for (int k = 0; k < 4; k++) {
-        uint8_t byte_to_send = (uint8_t)(data >> ((3 - k) * 8));
-        max7219_send_packet(reg, byte_to_send);
+        tx_buf[k * 2] = reg;
+        tx_buf[k * 2 + 1] = (uint8_t)(data >> ((3 - k) * 8));
     }
 
-    gpiod_line_request_set_value(request, PIN_CLK, GPIOD_LINE_VALUE_INACTIVE);
-    gpiod_line_request_set_value(request, PIN_CS, GPIOD_LINE_VALUE_ACTIVE);
+    struct spi_ioc_transfer tr = {0};
+    tr.tx_buf = (unsigned long)tx_buf;
+    tr.rx_buf = (unsigned long)rx_buf;
+    tr.len = 8;
+    tr.speed_hz = speed;
+    tr.bits_per_word = bits;
+
+    if (ioctl(fd, SPI_IOC_MESSAGE(1), &tr) < 0) {
+        perror("Error: SPI transfer failed");
+    }
 }
 
 void max7219_write_array(uint32_t *array) {
@@ -58,56 +48,29 @@ void max7219_write_array(uint32_t *array) {
     }
 }
 
-/*** INIT ***/
+/*** CLEAN UP ***/
 
-int chip_init(void) {
-    chip = gpiod_chip_open(CHIP_PATH);
-    if (!chip) {
-        perror("Error: chip - gpiod_chip_open ");
-        return -1;
+void max7219_cleanup(void) {
+    uint32_t empty[8] = {0};
+    max7219_write_array(empty);
+    if (fd) {
+        close(fd);
+        fd = -1;
     }
-    return 0;
 }
 
+/*** INIT ***/
+
 int max7219_init(void) {
-    struct gpiod_line_settings *line_settings = NULL; 
-    struct gpiod_line_config *line_config = NULL;
-    struct gpiod_request_config *req_config = NULL;
-
-    line_settings = gpiod_line_settings_new();
-    if (!line_settings) {
-        perror("Error: line_settings - gpiod_line_settings_new ");
-        exit(EXIT_FAILURE);        
+    fd = open(SPI_DEVICE, O_RDWR);
+    if (fd == -1) {
+        perror("Error: open spi device");
+        return -1;
     }
 
-    gpiod_line_settings_set_direction(line_settings, GPIOD_LINE_DIRECTION_OUTPUT);
-    gpiod_line_settings_set_output_value(line_settings, GPIOD_LINE_VALUE_INACTIVE);
-
-    line_config = gpiod_line_config_new();
-    if (!line_config) {
-        perror("Error: line_config - gpiod_line_config_new ");
-        goto error;     
-    }
-
-    gpiod_line_config_add_line_settings(line_config, out_offsets, 3, line_settings);
-
-    req_config = gpiod_request_config_new();
-    if(!req_config) {
-        perror("Error: req_config - gpiod_request_config_new ");
-        goto error; 
-    }
-
-    gpiod_request_config_set_consumer(req_config, "matrix_led_app");
-
-    request = gpiod_chip_request_lines(chip, req_config, line_config);
-    if (!request) {
-        perror("Error: request - gpiod_chip_request_lines ");
-        goto error; 
-    }
-
-    gpiod_line_settings_free(line_settings);
-    gpiod_line_config_free(line_config);
-    gpiod_request_config_free(req_config);
+    if (ioctl(fd, SPI_IOC_WR_MODE, &mode) == -1) goto error;
+    if (ioctl(fd, SPI_IOC_WR_BITS_PER_WORD, &bits) == -1) goto error;
+    if (ioctl(fd, SPI_IOC_WR_MAX_SPEED_HZ, &speed) == -1) goto error;
 
     max7219_write_row(DISPLAY_TEST, 0x00000000);
     max7219_write_row(DECODE_MODE, 0x00000000);
@@ -115,36 +78,10 @@ int max7219_init(void) {
     max7219_write_row(INTENSITY, 0x01010101);
     max7219_write_row(SHUTDOWN, 0x01010101);
 
-    gpiod_line_request_set_value(request, PIN_CLK, GPIOD_LINE_VALUE_INACTIVE);
-
     return 0;
 
     error:
-    if (line_settings) gpiod_line_settings_free(line_settings);
-    if (line_config) gpiod_line_config_free(line_config);
-    if (req_config) gpiod_request_config_free(req_config);
-    if (request) {
-        gpiod_line_request_release(request);
-        request = NULL;
-    }
+    perror("Error: SPI configuration failed");
     return -1;
-}
-
-/*** CLEAN UP ***/
-
-void max7219_cleanup(void) {
-
-    if (request) {
-        for (int k = 0; k < 8; k++) {
-            max7219_write_row(k + 1, 0x00);
-        }
-        gpiod_line_request_release(request);
-        request = NULL;
-    }
-
-    if (chip) {
-        gpiod_chip_close(chip);
-        chip = NULL;
-    }
 
 }
