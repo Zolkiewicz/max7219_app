@@ -3,6 +3,7 @@
 #include <gpiod.h>
 #include <stdint.h>
 #include <unistd.h>
+#include "../inc/max7219.h"
 
 #define PIN_DIN 10
 #define PIN_CS  8
@@ -19,10 +20,6 @@
 struct gpiod_chip *chip = NULL;
 struct gpiod_line_request *request = NULL;
 unsigned int out_offsets[] = {PIN_DIN, PIN_CS, PIN_CLK};
-
-int chip_init(void);
-int max7219_init(void);
-void cleanup(void);
 
 /*** SEND DATA ***/
 
@@ -55,22 +52,11 @@ void max7219_write_row(uint8_t reg, uint32_t data) {
     gpiod_line_request_set_value(request, PIN_CS, GPIOD_LINE_VALUE_ACTIVE);
 }
 
-/*** MAIN ***/
-
-int main(void) {
-    atexit(cleanup);
-    if (chip_init() == -1) exit(EXIT_FAILURE);
-    if (max7219_init() == -1) exit(EXIT_FAILURE);
-
-    for (int k = 0 ; k < 8; k++) {
-        max7219_write_row(k + 1, 300);
+void max7219_write_array(uint32_t *array) {
+    for (int k = 0; k < 8; k++) {
+        max7219_write_row(k + 1, array[k]);
     }
-
-    sleep(5);
-    
-    return 0;
 }
-
 
 /*** INIT ***/
 
@@ -146,7 +132,7 @@ int max7219_init(void) {
 
 /*** CLEAN UP ***/
 
-void cleanup(void) {
+void max7219_cleanup(void) {
 
     if (request) {
         for (int k = 0; k < 8; k++) {
