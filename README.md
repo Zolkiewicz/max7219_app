@@ -9,6 +9,7 @@ This project enables wireless (or local) control of an 8x32 LED matrix powered b
 <p align="center">
   <img width="600" alt="Hardware Setup" src="https://github.com/user-attachments/assets/ad3d7b6e-69ea-49cf-94d5-ffc787940aca" />
 </p>
+
 ## Project Architecture
 
 ```text
