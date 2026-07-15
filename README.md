@@ -1,9 +1,14 @@
 # MAX7219 app
 
 This project enables wireless (or local) control of an 8x32 LED matrix powered by the **MAX7219** driver, connected to a Raspberry Pi 
-<img width="564" height="226" alt="Screenshot From 2026-07-15 21-40-51" src="https://github.com/user-attachments/assets/826d9c83-b838-462d-a7df-c98d10e28899" />
-<img width="600" height="330" alt="eg3PI_ny" src="https://github.com/user-attachments/assets/ad3d7b6e-69ea-49cf-94d5-ffc787940aca" />
 
+<p align="center">
+  <img width="564" alt="GUI Screenshot" src="https://github.com/user-attachments/assets/826d9c83-b838-462d-a7df-c98d10e28899" />
+</p>
+
+<p align="center">
+  <img width="600" alt="Hardware Setup" src="https://github.com/user-attachments/assets/ad3d7b6e-69ea-49cf-94d5-ffc787940aca" />
+</p>
 ## Project Architecture
 
 ```text
